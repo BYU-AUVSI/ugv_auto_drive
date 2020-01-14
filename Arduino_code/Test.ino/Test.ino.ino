@@ -7,6 +7,13 @@ double delta_dir;
 static const int RXPin = 2, TXPin = 3; // according to the gps
 static const uint32_t GPSBaud = 9600;
 static const uint32_t HC12Baud = 9600;
+double after_lat;
+double after_lng;
+double curr_dir;
+double goal_dir;
+double init_lat;
+double init_lng;
+double distance_covered;
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -18,6 +25,7 @@ const double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
 
 void setup()
 {
+  distance_to_goal = 100;
   digitalWrite(9, LOW);   // start with everything off
   digitalWrite(10, LOW);
   digitalWrite(11, LOW);   
@@ -34,7 +42,7 @@ void setup()
 void loop()
 {
   ss.listen();
-  while (ss.available() > 0)
+  if (ss.available() > 0)
   {
       if (gps.encode(ss.read()))
     {
@@ -42,22 +50,27 @@ void loop()
       nav_code();
     }
   }
-
+  if (distance_to_goal < 3)
+  {
+    winner();
+  }
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
     Serial.println(F("No GPS detected: check wiring."));
   }
 }
 
+void winner()
+{
+  while (1){
+    Serial.print("You Did It");
+  }
+}
+
 void nav_code()
 {
-  double after_lat;
-  double after_lng;
-  double curr_dir;
-  double goal_dir;
-  double init_lat = gps.location.lat();
-  double init_lng = gps.location.lng();
-  double distance_covered;
+  init_lat = gps.location.lat();
+  init_lng = gps.location.lng();
   distance_to_goal =
   TinyGPSPlus::distanceBetween(
     gps.location.lat(),
@@ -65,50 +78,46 @@ void nav_code()
     Goal_Lat,
     Goal_Lng);
   int count = 0;
-  while(distance_to_goal > 3)
+    //drive forward
+    // delay(1000);
+    after_lat = gps.location.lat();
+    after_lng = gps.location.lng();
+    curr_dir = gps.course.deg(); // TinyGPSPlus::courseTo(init_lat,init_lng,after_lat,after_lng);
+    distance_to_goal = TinyGPSPlus::distanceBetween(after_lat,after_lng,Goal_Lat,Goal_Lng);
+    goal_dir = TinyGPSPlus::courseTo(after_lat,after_lng,Goal_Lat,Goal_Lng);
+    delta_dir = curr_dir-goal_dir; // turn left if positive, right if negative;
+    if(abs(delta_dir) > 180) // test so the car always turns the least amount
     {
-      //drive forward
-      // delay(1000);
-      after_lat = gps.location.lat();
-      after_lng = gps.location.lng();
-      curr_dir = gps.course.deg(); // TinyGPSPlus::courseTo(init_lat,init_lng,after_lat,after_lng);
-      distance_to_goal = TinyGPSPlus::distanceBetween(after_lat,after_lng,Goal_Lat,Goal_Lng);
-      goal_dir = TinyGPSPlus::courseTo(after_lat,after_lng,Goal_Lat,Goal_Lng);
-      delta_dir = curr_dir-goal_dir; // turn left if positive, right if negative;
-      if(abs(delta_dir) > 180) // test so the car always turns the least amount
-      {
-        delta_dir = (360-abs(delta_dir))*sign(delta_dir)*-1; //
-      }
-      Serial.print(distance_to_goal);
-      Serial.print("\t");
-      Serial.print(after_lat);
-      Serial.print("\t");
-      Serial.print(after_lng);
-      Serial.println();
-      HC12.listen();
-      HC12.write("Hello World");
-      ss.listen();
-      smartDelay(0);
-      //change direction
-      count = count +1;
-      if (count > 10)
-      {
-          if(delta_dir > 0)
-          {
-            drive_left(delta_dir);
-          }
-          else
-          {
-            drive_right(delta_dir);
-          }
-          //drive in direction
-          drive_straight(distance_to_goal);
-      }
-      //setup for next loop
-      init_lat = after_lat;
-      init_lng = after_lng;
+      delta_dir = (360-abs(delta_dir))*sign(delta_dir)*-1; //
     }
-    Serial.print("You Did It");
+    Serial.print(distance_to_goal);
+    Serial.print("\t");
+    Serial.print(delta_dir);
+    Serial.print("\t");
+    Serial.print(after_lng);
+    Serial.println();
+    HC12.listen();
+    HC12.write("Hello World");
+    ss.listen();
+    smartDelay(0);
+    //change direction
+    count = count +1;
+    if (count > 10)
+    {
+        if(delta_dir > 0)
+        {
+          drive_left(delta_dir);
+        }
+        else
+        {
+          drive_right(delta_dir);
+        }
+        //drive in direction
+        drive_straight(distance_to_goal);
+    }
+    //setup for next loop
+    init_lat = after_lat;
+    init_lng = after_lng;
     //printInt(distance_meters, gps.location.isValid(), 9);
     //Serial.println();
     //printFloat(dangle, gps.location.isValid(), 7, 2);
