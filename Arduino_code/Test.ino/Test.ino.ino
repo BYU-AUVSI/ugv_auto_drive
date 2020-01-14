@@ -4,7 +4,7 @@
 double distance_to_goal;
 double delta_dir;
 
-static const int RXPin = 4, TXPin = 3;
+static const int RXPin = 2, TXPin = 3; // according to the gps
 static const uint32_t GPSBaud = 9600;
 static const uint32_t HC12Baud = 9600;
 
@@ -12,9 +12,9 @@ static const uint32_t HC12Baud = 9600;
 TinyGPSPlus gps;
 
 // The serial connection to the GPS device
-SoftwareSerial ss(RXPin, TXPin);
+SoftwareSerial ss(TXPin, RXPin);
 SoftwareSerial HC12(5, 6); // HC-12 TX Pin, HC-12 RX Pin
-const double Goal_Lat = 40.246527, Goal_Lng = -111.647525;
+const double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
 
 void setup()
 {
@@ -33,27 +33,20 @@ void setup()
 
 void loop()
 {
-  // This sketch displays information every time a new sentence is correctly encoded.
-  
-  //transmission code
-  while (HC12.available())  // If HC-12 has data
-  {       
-    Serial.write(HC12.read());      // Send the data to Serial monitor
+  ss.listen();
+  while (ss.available() > 0)
+  {
+      if (gps.encode(ss.read()))
+    {
+      Serial.print(F("it is going into nav_code"));
+      nav_code();
+    }
   }
-  while (Serial.available()) // If Serial monitor has data
-  {      
-    HC12.write(Serial.read());      // Send that data to HC-12
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
   }
-  
-//  while (ss.available() > 0)
-//    if (gps.encode(ss.read()))
-//      nav_code();
-//
-//  if (millis() > 5000 && gps.charsProcessed() < 10)
-//  {
-//    Serial.println(F("No GPS detected: check wiring."));
-//    while(true);
-//  }
 }
 
 void nav_code()
@@ -71,7 +64,8 @@ void nav_code()
     gps.location.lng(),
     Goal_Lat,
     Goal_Lng);
-  while(1)
+  int count = 0;
+  while(distance_to_goal > 3)
     {
       //drive forward
       // delay(1000);
@@ -87,26 +81,28 @@ void nav_code()
       }
       Serial.print(distance_to_goal);
       Serial.print("\t");
-      Serial.print(goal_dir);
+      Serial.print(after_lat);
       Serial.print("\t");
-      Serial.print(delta_dir);
+      Serial.print(after_lng);
       Serial.println();
+      HC12.listen();
+      HC12.write("Hello World");
+      ss.listen();
       smartDelay(0);
       //change direction
-      if(delta_dir > 0)
+      count = count +1;
+      if (count > 10)
       {
-        drive_left(delta_dir);
-      }
-      else
-      {
-        drive_right(delta_dir);
-      }
-      //drive in direction
-      distance_covered = 0;
-      while(distance_to_goal > distance_covered)
-      {
-        drive_straight(delta_dir);
-        distance_covered = distance_covered+.1;
+          if(delta_dir > 0)
+          {
+            drive_left(delta_dir);
+          }
+          else
+          {
+            drive_right(delta_dir);
+          }
+          //drive in direction
+          drive_straight(distance_to_goal);
       }
       //setup for next loop
       init_lat = after_lat;
@@ -126,7 +122,11 @@ void drive_left(double dangle)
   digitalWrite(11, HIGH);   // turn the LED on (HIGH is the voltage level)
   digitalWrite(9, HIGH);   // turn the LED on (HIGH is the voltage level)
   //check angle
+  Serial.print("Turning Left: ");
+  Serial.print(dangle);
+  // delay(3000);
 }
+
 void drive_right(double dangle)
 {
   digitalWrite(9, LOW);  
@@ -134,14 +134,21 @@ void drive_right(double dangle)
   digitalWrite(10, HIGH);
   digitalWrite(12, HIGH); 
   //check angle 
+  Serial.print("Turning Right: ");
+  Serial.print(dangle);
+  // delay(3000);
 }
-void drive_straight(double dangle)
+
+void drive_straight(double dist)
 {
   digitalWrite(12, LOW);  
   digitalWrite(9, LOW); 
   digitalWrite(11, HIGH);   
   digitalWrite(10, HIGH);   
   //check distance
+  Serial.print("Driving Straight: ");
+  Serial.print(dist);
+  // delay(3000);
 }
 
 static void printFloat(float val, bool valid, int len, int prec)
@@ -202,6 +209,15 @@ int sign(double x)
       // to change Baud Rate: AT+Bxxxx ex. AT+B9600
       // to change Communication Channel: AT+Cxxx ex. AT+C006
 
+//  //transmission code
+//  while (HC12.available())  // If HC-12 has data
+//  {       
+//    Serial.write(HC12.read());      // Send the data to Serial monitor
+//  }
+//  while (Serial.available()) // If Serial monitor has data
+//  {      
+//    HC12.write(Serial.read());      // Send that data to HC-12
+//  }
 
 //GPS
       // Serial.println(gps.speed.mph()); // Speed in miles per hour (double)
