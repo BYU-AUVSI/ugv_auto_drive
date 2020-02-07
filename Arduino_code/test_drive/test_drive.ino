@@ -1,3 +1,5 @@
+// tests driving capability driving forward, driving backward, turning
+
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
@@ -55,7 +57,7 @@ void setup() {
   pinMode(frontEncoder, INPUT);
   pinMode(backEncoder, INPUT);
   
-  digitalWrite(ATpin, HIGH); // For command mode set to high
+  digitalWrite(ATpin, HIGH); // For command mode set to low
   digitalWrite(frontMotor1, LOW);
   digitalWrite(frontMotor2, LOW);
   digitalWrite(backMotor1, LOW);
@@ -68,133 +70,34 @@ void setup() {
 }
 
 void loop() {
+  drive_straight(10);
+  delay(2000);
+  drive_left(10);
+  delay(2000);
+  drive_straight(10);
+  delay(2000);
+  drive_right(10);
+  delay(2000);
 
-  check_boundary_area();
-  
-  switch (state){
-    case in_air:
-      Serial.print(F("in_air"));
-      check_for_messages();
-      h = get_height();
-      Serial.print(h);
-      if (h < 10 && h != -1){
-        state = triangulate;
-      }
-      break;
-    case left:
-      drive_left(delta_dir);
-      break;
-    case wait:
-      Serial.print(F("stopping"));
-      stop_fun();
-      break;
-    case navigate:
-      ss.listen();
-      if (ss.available() > 0) // if gps is working
-      {
-        if (gps.encode(ss.read())) //if you are able to encode the gps object
-        {
-          Serial.print(F("going into get_path"));
-          get_path();
-        }
-      }
-      break;
-    case triangulate:
-      ss.listen();
-      if (ss.available() > 0) // if gps is working
-      {
-        if (gps.encode(ss.read())) //if you are able to encode the gps object
-        {
-          get_n_set_orientation;
-        }
-      }
-  }
-  
-  if (distance_to_goal < 3)
-  {
-    state = wait;
-    Serial.print("You Did It");
-  }
-  
-}
-
-void check_boundary_area(){
-  ss.listen();
-  if (ss.available() > 0) // if gps is working
-  {
-    if (gps.encode(ss.read())) //if you are able to encode the gps object
-    {
-      x = gps.location.lat();
-      y = gps.location.lng();
-      if (pointInPolygon()){
-        stop_fun();
-        state = wait;
-        Serial.print("You went outside the boundaries");
-        while(1);
-      }   
-    }
-  }
-}
-
-void get_n_set_orientation(){
-  init_lat = gps.location.lat();
-  init_lng = gps.location.lng();
-  drive_straight(5);
-  straight_lat = gps.location.lat();
-  straight_lng = gps.location.lng();
-  drive_left(90);
-  drive_straight(5);
   stop_fun();
-  after_lat = gps.location.lat();
-  after_lng = gps.location.lng();
-  course1 = TinyGPSPlus::courseTo(init_lat,init_lng,straight_lat,straight_lng);
-  course2 = TinyGPSPlus::courseTo(straight_lat,straight_lng,after_lat,after_lng);
-  if (course1 <= 90 && course2 > 90){
-    if (course2 > 225){
-      //keep motors the way they are
-      state = navigate;
-    }
-    else{
-      //switch motors
-      switch_motors();
-    }
-  }
-  else{
-    if (course1 <= 180 && (course2 > 180 || course2 < 90)){
-      if (course2 < 90 || course2 > 315){
-        // keep motors the way they are
-        state = navigate; 
-      }
-      else{
-        //switch motors
-        switch_motors();
-      }
-    }
-    else{
-      if (course1 <= 270 && (course2 > 270 || course2 < 180)){
-        if (course2 < 180 || course2 > 45){
-          //keep motors the way they are
-          state = navigate;
-        }
-        else{
-          //switch motors
-          switch_motors();
-        }
-      }
-      else{
-        if (course1 > 270 && course2 < 270){
-          if (course2 < 270 || course2 > 135){
-            //keep motors the way they are
-            state = navigate;
-          }
-          else{
-            //switch motors
-            switch_motors();
-          }
-        }
-      }
-    }
-  }
+  delay(2000);
+  
+  switch_motors;
+  delay(500);
+  drive_straight(10);
+  delay(2000);
+  drive_left(10);
+  delay(2000);
+  drive_straight(10);
+  delay(2000);
+  drive_right(10);
+  delay(2000);
+
+  stop_fun();
+  delay(2000);
+
+  switch_motors();
+  delay(500);
 }
 
 void switch_motors(){
@@ -206,45 +109,7 @@ void switch_motors(){
   frontMotor2 = a;
   backMotor1 = d;
   backMotor2 = c;
-}
-
-double get_height(){
-  ss.listen();
-  delay(1000);
-  h = -1;
-  if (ss.available() > 0) // if gps is working
-  {
-    Serial.write("hello world");
-    Serial.print(gps.encode(ss.read()));
-    if (gps.encode(ss.read())) //if you are able to encode the gps object
-    {
-      Serial.print("made it2");
-      if (gps.altitude.isUpdated())
-        h = gps.altitude.meters();
-    }
-  }
-  
-  return h;
-}
-
-void check_for_messages(){
-  HC12.listen();
-  while (HC12.available()) {        // Check if HC-12 has data
-    byte c = HC12.read();
-    s += char(c);
-    writer = true;
-  }
-}
-
-void send_gpsloc(double x, double y)
-{
-  // send two doubles seperated by a comma
-  HC12.listen();
-  sa = String(x,10);
-  sb = String(y,10);
-  s = sa+','+sb;
-  HC12.print(s);
-  HC12.write(";");
+  Serial.print("Switching Motors!");
 }
 
 void stop_fun()
@@ -253,82 +118,28 @@ void stop_fun()
   digitalWrite(frontMotor2, LOW);
   digitalWrite(backMotor1, LOW);
   digitalWrite(backMotor2, LOW);
-}
-
-void get_path()
-{
-  init_lat = gps.location.lat();
-  init_lng = gps.location.lng();
-  distance_to_goal =
-  TinyGPSPlus::distanceBetween(
-    gps.location.lat(),
-    gps.location.lng(),
-    Goal_Lat,
-    Goal_Lng);
-  int count = 0;
-  //drive forward
-  // delay(1000);
-  after_lat = gps.location.lat();
-  after_lng = gps.location.lng();
-  curr_dir = gps.course.deg();
-  distance_to_goal = TinyGPSPlus::distanceBetween(after_lat,after_lng,Goal_Lat,Goal_Lng);
-  goal_dir = TinyGPSPlus::courseTo(after_lat,after_lng,Goal_Lat,Goal_Lng);
-  delta_dir = curr_dir-goal_dir; // turn left if positive, right if negative;
-  if(abs(delta_dir) > 180) // test so the car always turns the least amount
-  {
-    delta_dir = (360-abs(delta_dir))*sign(delta_dir)*-1; //
-  }
-  Serial.print(distance_to_goal);
-  Serial.print("\t");
-  Serial.print(delta_dir);
-  Serial.print("\t");
-  Serial.print(after_lng);
-  Serial.println();
-  HC12.listen();
-  HC12.write("Hello World");
-  ss.listen();
-  smartDelay(0);
-  //change direction
-  count = count +1;
-  if (count > 10)
-  {
-      if(delta_dir > 0)
-      {
-        drive_left(delta_dir);
-      }
-      else
-      {
-        drive_right(delta_dir);
-      }
-      //drive in direction
-      drive_straight(distance_to_goal);
-  }
-  //setup for next loop
-  init_lat = after_lat;
-  init_lng = after_lng;
-  send_gpsloc(init_lat,init_lng);
+  Serial.print("Stopping!");
 }
 
 void drive_left(double dangle)
 {
-  digitalWrite(frontMotor1, LOW); 
+  digitalWrite(frontMotor2, LOW); 
   digitalWrite(backMotor1, LOW);
   
-  digitalWrite(frontMotor2, HIGH);
+  digitalWrite(frontMotor1, HIGH);
   digitalWrite(backMotor2, HIGH);
   
   //check angle
   Serial.print("Turning Left: ");
   Serial.print(dangle);
-  // delay(3000);
 }
 
 void drive_right(double dangle)
 {
-  digitalWrite(frontMotor2, LOW); 
+  digitalWrite(frontMotor1, LOW); 
   digitalWrite(backMotor2, LOW);
   
-  digitalWrite(frontMotor1, HIGH);
+  digitalWrite(frontMotor2, HIGH);
   digitalWrite(backMotor1, HIGH);
   
   //check angle 
