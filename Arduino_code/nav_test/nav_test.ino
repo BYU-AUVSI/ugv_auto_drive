@@ -48,6 +48,7 @@ int prev = 0; // previous voltage of pulse (high or low)
 long init_time = millis();
 double rotations = 0;
 double distance = 0;
+int count;
 
 // define states
 enum States {in_air, left, right, straight, wait, navigate, triangulate};
@@ -62,7 +63,8 @@ TinyGPSPlus gps;
 SoftwareSerial ss(gpsTXPin, gpsRXPin);
 SoftwareSerial HC12(HCTXPin, HCRXPin); // HC-12 TX Pin, HC-12 RX Pin
 
-void setup() {
+void setup()
+{
   // setup serial communications
   Serial.begin(monitorBaud);             // Serial port to computer
   HC12.begin(HC12Baud);               // Serial port to HC12
@@ -88,42 +90,109 @@ void setup() {
 
   state = in_air;
   distance_to_goal = 100;
+  count = 0;
+  
+  Serial.println(F("HelloWorld"));
+  Serial.println();
 
   attachInterrupt(digitalPinToInterrupt(frontEncoder), encoder_counter, RISING); 
 }
 
-void loop() {
-//  drive_straight(5);
-//  drive_left(5);
-  drive_straight(1);
-  smart_stop();
-  drive_right(3);
-  smart_stop();
-  drive_straight(1);
-  smart_stop();
-  drive_left(5);
-//  delay(2000);
-//
-//  stop_fun();
-//  delay(2000);
-//  
-//  switch_motors;
-//  delay(500);
-//  drive_straight(10);
-//  delay(2000);
-//  drive_left(10);
-//  delay(2000);
-//  drive_straight(10);
-//  delay(2000);
-//  drive_right(10);
-//  delay(2000);
+void loop()
+{
+  ss.listen();
+  if (ss.available() > 0)
+  {
+      if (gps.encode(ss.read()))
+    {
+      Serial.print(F("it is going into nav_code"));
+      nav_code();
+    }
+  }
+  if (distance_to_goal < 3)
+  {
+    winner();
+  }
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+  }
+}
 
-  stop_fun(0);
-  while(1);
-//  delay(2000);
-//
-//  switch_motors();
-//  delay(500);
+void check_for_messages(){
+  HC12.listen();
+  while (HC12.available()) {        // Check if HC-12 has data
+    byte c = HC12.read();
+    s += char(c);
+    writer = true;
+  }
+  ss.listen();
+}
+
+void winner()
+{
+  while (1){
+    Serial.print("You Did It");
+  }
+}
+
+void nav_code()
+{
+  init_lat = gps.location.lat();
+  init_lng = gps.location.lng();
+  distance_to_goal =
+  TinyGPSPlus::distanceBetween(
+    gps.location.lat(),
+    gps.location.lng(),
+    Goal_Lat,
+    Goal_Lng);
+    //drive forward
+    // delay(1000);
+    after_lat = gps.location.lat();
+    after_lng = gps.location.lng();
+    curr_dir = gps.course.deg(); // TinyGPSPlus::courseTo(init_lat,init_lng,after_lat,after_lng);
+    distance_to_goal = TinyGPSPlus::distanceBetween(after_lat,after_lng,Goal_Lat,Goal_Lng);
+    goal_dir = TinyGPSPlus::courseTo(after_lat,after_lng,Goal_Lat,Goal_Lng);
+    delta_dir = curr_dir-goal_dir; // turn left if positive, right if negative;
+    if(abs(delta_dir) > 180) // test so the car always turns the least amount
+    {
+      delta_dir = (360-abs(delta_dir))*sign(delta_dir)*-1; //
+    }
+    Serial.print(distance_to_goal);
+    Serial.print("\t");
+    Serial.print(delta_dir);
+    Serial.print("\t");
+    Serial.print(after_lng);
+    Serial.println();
+    HC12.listen();
+    HC12.write("Hello World");
+    check_for_messages();
+    ss.listen();
+    smartDelay(0);
+    //change direction
+    count = count +1;
+    Serial.print(count);
+    if (count > 10)
+    {
+        if(delta_dir > 0)
+        {
+          drive_left(delta_dir);
+        }
+        else
+        {
+          drive_right(delta_dir);
+        }
+        //drive in direction
+        drive_straight(distance_to_goal);
+        count = 0;
+    }
+    //setup for next loop
+    init_lat = after_lat;
+    init_lng = after_lng;
+    //printInt(distance_meters, gps.location.isValid(), 9);
+    //Serial.println();
+    //printFloat(dangle, gps.location.isValid(), 7, 2);
+    //Serial.println();
 }
 
 void switch_motors(){
@@ -200,6 +269,7 @@ void drive_left(double dangle)
     distance = rotations * circumference;
     Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
   }
+  smart_stop();
 }
 
 void drive_right(double dangle)
@@ -218,6 +288,7 @@ void drive_right(double dangle)
   smart_stop();
   switch_motors();
   drive_straight(2);
+  smart_stop();
 }
 
 void drive_straight(double dist)
@@ -239,57 +310,12 @@ void drive_straight(double dist)
     distance = rotations * circumference;
     Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
   }
+  smart_stop();
 }
 
 void encoder_counter() {
   transitions += 1;
 }
-
-//notes:
-
-// PWM Must be one of 3, 5, 6, 9, 10, or 11
-
-//Encoder
-
-//  if ((millis() - init_time) % 1000 == 0){
-//    Serial.print(distance);
-//    Serial.println(" meters");
-//  }
-//  frequency = transitions/2.0;
-//  period = 1.0/frequency;
-//  rpm = 60000/ms_measured/period/ppr;
-
-//Antenna
-      // To set up antenna connect ground to set.
-      // type AT into monitor and it will reply with OK
-      // to change Baud Rate: AT+Bxxxx ex. AT+B9600
-      // to change Communication Channel: AT+Cxxx ex. AT+C006
-
-      // when you use the serial monitor to send custom messages it does a wierd thing where only the first three characters of a new line make it to the computer
-
-//  //transmission code
-//  while (HC12.available())  // If HC-12 has data
-//  {       
-//    Serial.write(HC12.read());      // Send the data to Serial monitor
-//  }
-//  while (Serial.available()) // If Serial monitor has data
-//  {      
-//    HC12.write(Serial.read());      // Send that data to HC-12
-//  }
-
-//GPS
-      // Serial.println(gps.speed.mph()); // Speed in miles per hour (double)
-      // Serial.println(gps.speed.mps()); // Speed in meters per second (double)
-      // Serial.println(gps.speed.kmph()); // Speed in kilometers per hour (double)
-      // Serial.println(gps.course.value()); // Raw course in 100ths of a degree (i32)
-      // Serial.println(gps.course.deg()); // Course in degrees (double)
-      // Serial.println(gps.satellites.value()); // Number of satellites in use (u32)
-      // Serial.println(gps.hdop.value()); // Horizontal Dim. of Precision (100ths-i32)      
-
-
-////////////////////////////////////////////////////////////////////////////////////
-//Extra Functions
-////////////////////////////////////////////////////////////////////////////////////
 
 static void printFloat(float val, bool valid, int len, int prec)
 {
@@ -341,35 +367,29 @@ int sign(double x)
   return signOfX;
 }
 
-//  Globals which should be set before calling this function:
-//
-//  int    polyCorners  =  how many corners the polygon has
-//  float  polyX[]      =  horizontal coordinates of corners
-//  float  polyY[]      =  vertical coordinates of corners
-//  float  x, y         =  point to be tested
-//
-//  (Globals are used in this example for purposes of speed.  Change as
-//  desired.)
-//
-//  The function will return true if the point x,y is inside the polygon, or
-//  NO if it is not.  If the point is exactly on the edge of the polygon,
-//  then the function may return true or false.
-//
-//  Note that division by zero is avoided because the division is protected
-//  by the "if" clause which surrounds it.
+//notes:
 
-// from: http://alienryderflex.com/polygon/
+//Antenna
+      // To set up antenna connect ground to set.
+      // type AT into monitor and it will reply with OK
+      // to change Baud Rate: AT+Bxxxx ex. AT+B9600
+      // to change Communication Channel: AT+Cxxx ex. AT+C006
 
-bool pointInPolygon() {
+//  //transmission code
+//  while (HC12.available())  // If HC-12 has data
+//  {       
+//    Serial.write(HC12.read());      // Send the data to Serial monitor
+//  }
+//  while (Serial.available()) // If Serial monitor has data
+//  {      
+//    HC12.write(Serial.read());      // Send that data to HC-12
+//  }
 
-  int   i, j=polyCorners-1 ;
-  bool  oddNodes=false     ;
-  
-  for (i=0; i<polyCorners; i++) {
-    if ((polyY[i]< y && polyY[j]>=y
-    ||   polyY[j]< y && polyY[i]>=y)
-    &&  (polyX[i]<=x || polyX[j]<=x)) {
-      oddNodes^=(polyX[i]+(y-polyY[i])/(polyY[j]-polyY[i])*(polyX[j]-polyX[i])<x); }
-    j=i; }
-
-  return oddNodes; }  
+//GPS
+      // Serial.println(gps.speed.mph()); // Speed in miles per hour (double)
+      // Serial.println(gps.speed.mps()); // Speed in meters per second (double)
+      // Serial.println(gps.speed.kmph()); // Speed in kilometers per hour (double)
+      // Serial.println(gps.course.value()); // Raw course in 100ths of a degree (i32)
+      // Serial.println(gps.course.deg()); // Course in degrees (double)
+      // Serial.println(gps.satellites.value()); // Number of satellites in use (u32)
+      // Serial.println(gps.hdop.value()); // Horizontal Dim. of Precision (100ths-i32)      
