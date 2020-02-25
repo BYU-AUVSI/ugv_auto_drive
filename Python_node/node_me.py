@@ -1,69 +1,71 @@
-#ftdi://0x10c4:0xea60
-#pyusb tutorial
-# import usb.core
-# import usb.util
-#
-# # find our device
-# dev = usb.core.find(idVendor=0x10c4, idProduct=0xea60)
-#
-# # was it found?
-# if dev is None:
-#     raise ValueError('Device not found')
-#
-# #need to run this section otherwise you get busy error
-# reattach = False
-# if dev.is_kernel_driver_active(0):
-#     reattach = True
-#     dev.detach_kernel_driver(0)
-#
-# # set the active configuration. With no arguments, the first
-# # configuration will be the active one
-# dev.set_configuration()
-#
-# # get an endpoint instance
-# cfg = dev.get_active_configuration()
-# intf = cfg[(0,0)]
-#
-# ep = usb.util.find_descriptor(
-#     intf,
-#     # match the first OUT endpoint
-#     custom_match = \
-#     lambda e: \
-#         usb.util.endpoint_direction(e.bEndpointAddress) == \
-#         usb.util.ENDPOINT_OUT)
-#
-# assert ep is not None
-#
-# # write the data
-# ep.write('test')
-
-# ## Might possible need this part??????
-# # This is needed to release interface, otherwise attach_kernel_driver fails
-# # due to "Resource busy"
-# usb.util.dispose_resources(dev)
-#
-# # It may raise USBError if there's e.g. no kernel driver loaded at all
-# if reattach:
-#     dev.attach_kernel_driver(0)
-
-#### Round 2
+#Python3
+#!/usr/bin/env python
 
 import serial
-ser = serial.Serial()
-ser.baudrate = 9600
-ser.port = '/dev/ttyUSB1'
-ser.open()
-ser.is_open
+import rospy
+import time
 
-ser.write(b'hello')
+# Wait for 5 seconds
 
-#ser.read(100)
+from std_msgs.msg import String
 
+def talker():
+    pub = rospy.Publisher('chatter', String, queue_size=10)
+    rospy.init_node('talker', anonymous=True)
+    rate = rospy.Rate(10) # 10hz
+    ser = serial.Serial()
+    ser.baudrate = 1200 # 9600
+    while not rospy.is_shutdown():
+    ####### Code for communication
+        for i in range(256):
+        try:
+            ser.port = '/dev/ttyUSB'+str(i)
+            ser.open()
+            if ser.is_open:
+                break
+        except serial.SerialException:
+            pass
+
+        ser.write(b'Hello World')
+        x = 0
+        while True:
+            x = x+1
+            ser.write(x)
+            ser.write(b'hello;')
+            s = ser.read_until(b';')
+            print(s)
+
+        ser.write(b'straight,1,;')
+
+        while True:
+            s = ser.read_until(b';')
+            print(s)
+
+    ser.close()
+    ### end of code for communication
+
+
+ if __name__ == '__main__':
+     try:
+        talker()
+     except rospy.ROSInterruptException:
+        pass
+
+
+"""Notes
+
+#url for serial port if needed:  ftdi://0x10c4:0xea60
+
+For Testing:
+This code will write consecutive integers to the hc12 and the hc12 should send the same thing back
+---------------
 while True:
+    x = x+1
+    stringer = str(x)
+    ser.write(bytes(stringer,'utf-8'))
+    ser.write(b';')
     s = ser.read_until(b';')
     print(s)
+----------------
 
-
-
-ser.close()
-ser.is_open
+"""
