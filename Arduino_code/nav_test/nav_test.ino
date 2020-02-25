@@ -8,7 +8,7 @@
 #define frontEncoder 2
 #define HCRXPin 4
 #define HCTXPin 5
-#define ATpin 6 // used to switch to AT mode
+#define ATpin 6 // used to switch to AT modet
 #define gpsRXPin 7
 #define gpsTXPin 8
 int frontMotor1=9;
@@ -31,8 +31,10 @@ int backMotor2=12;
 double distance_to_goal, delta_dir, after_lat, after_lng, curr_dir;
 double straight_lat, straight_lng, course1, course2;
 double goal_dir, init_lat, init_lng, distance_covered, x, y, h;
-double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
-String s,sa,sb;
+double Goal_Lat = 40.246187, Goal_Lng = -111.646674; //Manhole cover in parking lot
+//double Goal_Lat = 40.246204, Goal_Lng = -111.646780; // sidewalk cover
+//double Goal_Lat = 40.24642, Goal_Lng = -111.64638; // manhole in street by parking lot
+String s,sa,sb,sc;
 bool writer;
 int    polyCorners  = 4; // how many corners the polygon has
 float  polyX[] = {38.14615, 38.14635, 38.14557, 38.14541 };  //latitudinal coordinates of corners
@@ -50,6 +52,14 @@ double rotations = 0;
 double distance = 0;
 int count;
 
+struct gps_lat_lng {
+   double latitude;
+   double longitude;
+   double crs;
+};
+
+gps_lat_lng gps_state;
+
 // define states
 enum States {in_air, left, right, straight, wait, navigate, triangulate};
 enum Orientations {upside, downside};
@@ -62,6 +72,8 @@ TinyGPSPlus gps;
 // The serial connection to the GPS device
 SoftwareSerial ss(gpsTXPin, gpsRXPin);
 SoftwareSerial HC12(HCTXPin, HCRXPin); // HC-12 TX Pin, HC-12 RX Pin
+
+void send_state(String typer = "none", double x = 0.0, double y=0.0, double z=0.0);
 
 void setup()
 {
@@ -101,9 +113,8 @@ void setup()
 void loop()
 {
   ss.listen();
-  if (ss.available() > 0)
-  {
-      if (gps.encode(ss.read()))
+  if (ss.available() > 0){
+    if (gps.encode(ss.read()))
     {
       Serial.print(F("it is going into nav_code"));
       nav_code();
@@ -131,8 +142,12 @@ void check_for_messages(){
 
 void winner()
 {
+  stop_fun(0);
+  HC12.listen();
   while (1){
     Serial.print("You Did It");
+    HC12.write("You did it!;");
+    send_state("gps_coordinates",init_lat,init_lng,distance_to_goal);
   }
 }
 
@@ -165,22 +180,32 @@ void nav_code()
     Serial.print(after_lng);
     Serial.println();
     HC12.listen();
-    HC12.write("Hello World");
+    send_state("directions_to_goal",distance_to_goal,delta_dir);
     check_for_messages();
     ss.listen();
     smartDelay(0);
     //change direction
     count = count +1;
-    Serial.print(count);
-    if (count > 10)
+    Serial.println(count);
+    Serial.println();
+    Serial.print("valid GPS? :: ");
+    Serial.print("\t");
+    Serial.print(gps.location.isValid());
+    if (count > 10 && gps.location.isValid()) //slow down loop and check if gps location is valid                                                
     {
         if(delta_dir > 0)
         {
-          drive_left(delta_dir);
+          drive_left(delta_dir, goal_dir);
         }
         else
         {
-          drive_right(delta_dir);
+          if (delta_dir > -90){
+            drive_right(delta_dir, goal_dir, curr_dir);
+          }
+          else{
+            switch_motors();
+            drive_left(delta_dir+90,goal_dir);
+          }
         }
         //drive in direction
         drive_straight(distance_to_goal);
@@ -195,6 +220,19 @@ void nav_code()
     //Serial.println();
 }
 
+void send_state(String typer, double x, double y, double z)
+{
+  // send two doubles seperated by a comma
+  HC12.listen();
+  sa = String(x,10);
+  sb = String(y,10);
+  sc = String(z,10);
+  s = typer+','+sa+','+sb+','+sc;
+  HC12.print(s);
+  HC12.write(";");
+  ss.listen();
+}
+
 void switch_motors(){
   int a = frontMotor1;
   int b = frontMotor2;
@@ -205,6 +243,7 @@ void switch_motors(){
   backMotor1 = d;
   backMotor2 = c;
   Serial.print("Switching Motors!");
+  send_state("Switching_motors");
   switch (orientation){
     case upside:
       orientation = downside;
@@ -228,19 +267,19 @@ void smart_stop(){
   }
 }
 
-void stop_fun(double dangle)
+void stop_fun(double time_delay)
 {
   digitalWrite(frontMotor1, LOW);
   digitalWrite(frontMotor2, LOW);
   digitalWrite(backMotor1, LOW);
   digitalWrite(backMotor2, LOW);
   Serial.print("Stopping!");
-  if (dangle != 0){
-    delay(dangle);
+  if (time_delay != 0){
+    delay(time_delay);
   }
 }
 
-void drive_left(double dangle)
+void drive_left(double dangle, double goal_theta)
 {
   if (orientation == upside){
     digitalWrite(frontMotor2, LOW); 
@@ -258,41 +297,60 @@ void drive_left(double dangle)
     analogWrite(frontMotor1, 255);
     analogWrite(backMotor1, 1);
   }
-  
+  dangle = dangle*5/90; //deg to meters
   //check angle
+  send_state("Left_turn",dangle);
   Serial.print("Turning Left: ");
   Serial.print(dangle);
   distance = 0;
   transitions = 0;
-  while(distance < dangle){
+  gps_state = get_gpsloc();
+  while(distance < abs(dangle) ||  abs(gps_state.crs-goal_theta)>15){
     rotations = transitions/ppr;
     distance = rotations * circumference;
     Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
+    gps_state = get_gpsloc();
   }
   smart_stop();
 }
 
-void drive_right(double dangle)
+void drive_right(double dangle, double goal_theta, double curr_theta)
 {
   Serial.print("Turning Right: ");
-  drive_left(dangle);
-  Serial.print(dangle);
-  // delay(3000);
-  distance = 0;
-  transitions = 0;
-  while(distance < dangle/2){
-    rotations = transitions/ppr;
-    distance = rotations * circumference;
-    Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
-  }
+  send_state("Right_turn",dangle);
+  drive_left(90, curr_theta-90);
   smart_stop();
   switch_motors();
-  drive_straight(2);
+  drive_left(90-abs(dangle), goal_theta);
+  Serial.print(dangle);
   smart_stop();
+}
+
+struct gps_lat_lng get_gpsloc(){
+  struct gps_lat_lng loc;
+  int count = 0;
+  ss.listen();
+  while (count < 100){
+    if (ss.available() > 0){
+      if (gps.encode(ss.read()))
+      {
+        loc.latitude = gps.location.lat();
+        loc.longitude =  gps.location.lng();
+        loc.crs = gps.course.deg();
+        count = 101;
+      }
+    }
+    count = count +1; 
+  }
+  return loc;
 }
 
 void drive_straight(double dist)
 {
+  dist = dist-(delta_dir*5/90);
+  if (dist > 5){
+    dist = 5;
+  }
   digitalWrite(frontMotor2, LOW); 
   digitalWrite(backMotor2, LOW);
   
@@ -300,8 +358,9 @@ void drive_straight(double dist)
   digitalWrite(backMotor1, HIGH);
     
   //check distance
-  Serial.print("Driving Straight: ");
+  Serial.print("Driving_Straight");
   Serial.print(dist);
+  send_state("straight: ",dist);
   // delay(3000);
   distance = 0;
   transitions = 0;

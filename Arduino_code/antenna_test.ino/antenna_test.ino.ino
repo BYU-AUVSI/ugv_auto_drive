@@ -1,7 +1,7 @@
 //#include <TinyGPS++.h>
 //#include <SoftwareSerial.h>
 //
-//double distance_to_goal;
+//double distance_to_goal;s
 //double delta_dir;
 //
 //static const int RXPin = 2, TXPin = 3; // according to the gps
@@ -22,22 +22,58 @@
 //SoftwareSerial ss(TXPin, RXPin);
 //SoftwareSerial HC12(3, 4); // HC-12 TX Pin, HC-12 RX Pin
 //const double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
-
+#define ATpin 5 // used to switch to AT mode
 #include <SoftwareSerial.h>
-SoftwareSerial HC12(3, 4); // HC-12 TX Pin, HC-12 RX Pin
-double x;
+SoftwareSerial HC12(4, 3); // HC-12 TX Pin, HC-12 RX Pin
+double x,y;
+String s,sa,sb;
+bool writer;
+
 void setup() {
-  Serial.begin(115200);             // Serial port to computer
-  HC12.begin(9600);               // Serial port to HC12
-  x = 0;
+  Serial.begin(9600);//1200);             // Serial port to computer
+  HC12.begin(9600);//1200);               // Serial port to HC12
+  x = -111.100239;
+  y = 42.0213923;
+  pinMode(ATpin, OUTPUT);
+  digitalWrite(ATpin, LOW); // AT Mode
+  bool writer = false;
 }
 void loop() {
-  while (HC12.available()) {        // If HC-12 has data
+    while (HC12.available())  // If HC-12 has data
+  {       
     Serial.write(HC12.read());      // Send the data to Serial monitor
   }
-  x = x+1;
-  //HC12.write(x);
-  HC12.write("hello world;");
+  while (Serial.available()) // If Serial monitor has data
+  {      
+    HC12.write(Serial.read());      // Send that data to HC-12
+  }
+
+//  while (HC12.available()) {        // If HC-12 has data
+//    byte c = HC12.read();
+//    s += char(c);
+//    writer = true;
+//  }
+//
+//  if (s.endsWith(";") && writer == true) {
+//      HC12.print(s);
+//      Serial.print(s);
+//      s = "";
+//      writer = false;
+//    }
+//  x = x+1.02;
+//  y = y+1;
+//  sa = String(x,10);
+//  sb = String(y,10);
+//  s = sa+','+sb;
+//  HC12.print(s);
+//  HC12.write(";");
+//  Serial.println(x);
+//  delay(1000);
+//  
+//  while (Serial.available()) // If Serial monitor has data
+//  {      
+//    HC12.write(Serial.read());      // Send that data to HC-12
+//  }
 //  delay(1000);
 //  while (Serial.available()) {      // If Serial monitor has data
 //    //char c = Serial.read();  //gets one byte from serial buffer

@@ -16,7 +16,7 @@ int backMotor2=12;
 
 // define baud rates
 #define GPSBaud 9600
-#define HC12Baud 1200
+#define HC12Baud 9600
 #define monitorBaud 1200
 
 // define global variables
@@ -26,7 +26,7 @@ double goal_dir, init_lat, init_lng, distance_covered, x, y, h;
 double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
 String s,sa,sb;
 bool writer;
-int    polyCorners  = 4; // how many corners the polygon has
+int    polyCorners  = 4; // how many cornersM the polygon has
 float  polyX[] = {38.14615, 38.14635, 38.14557, 38.14541 };  //latitudinal coordinates of corners
 float  polyY[] = {-76.42668, -76.42617, -76.42608, -76.42661}; //longitudinal coordinates of corners
 
@@ -73,10 +73,19 @@ void loop() {
   
   switch (state){
     case in_air:
-      Serial.print(F("in_air"));
+        ss.listen();
+        h = -1;
+        if (ss.available() > 0) // if gps is working
+        {
+          if (gps.encode(ss.read())) //if you are able to encode the gps object
+          {
+            Serial.println("made it2");
+            if (gps.altitude.isUpdated())
+              h = gps.altitude.meters();
+          }
+        }
       check_for_messages();
       h = get_height();
-      Serial.print(h);
       if (h < 10 && h != -1){
         state = triangulate;
       }
@@ -210,12 +219,9 @@ void switch_motors(){
 
 double get_height(){
   ss.listen();
-  delay(1000);
   h = -1;
   if (ss.available() > 0) // if gps is working
   {
-    Serial.write("hello world");
-    Serial.print(gps.encode(ss.read()));
     if (gps.encode(ss.read())) //if you are able to encode the gps object
     {
       Serial.print("made it2");
@@ -223,7 +229,6 @@ double get_height(){
         h = gps.altitude.meters();
     }
   }
-  
   return h;
 }
 
@@ -234,6 +239,8 @@ void check_for_messages(){
     s += char(c);
     writer = true;
   }
+  ss.listen();
+  smartDelay(0);
 }
 
 void send_gpsloc(double x, double y)

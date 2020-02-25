@@ -31,7 +31,8 @@ int backMotor2=12;
 double distance_to_goal, delta_dir, after_lat, after_lng, curr_dir;
 double straight_lat, straight_lng, course1, course2;
 double goal_dir, init_lat, init_lng, distance_covered, x, y, h;
-double Goal_Lat = 40.246204, Goal_Lng = -111.646780;
+double Goal_Lat = 40.2580552, Goal_Lng = -111.6575302; //20 yard line west parking lot
+//double Goal_Lat = 40.246204, Goal_Lng = -111.646780; //sidewalk cover EB
 String s,sa,sb,sc;
 bool writer;
 int    polyCorners  = 4; // how many corners the polygon has
@@ -55,6 +56,7 @@ enum States {in_air, left, right, straight, wait, navigate, triangulate};
 enum Orientations {upside, downside};
 Orientations orientation = upside;
 States state = in_air; 
+
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -91,89 +93,79 @@ void setup() {
 
   state = in_air;
   distance_to_goal = 100;
-
-  attachInterrupt(digitalPinToInterrupt(backEncoder), back_encoder_counter, RISING);
-  attachInterrupt(digitalPinToInterrupt(frontEncoder), front_encoder_counter, RISING); 
 }
 
 void loop() {
-//  drive_straight(5);
-//  drive_left(5);
-  check_for_messages();
-  
-  if (s.endsWith(";")){
-    Serial.print("wrote: ");
-    //Serial.print(s);
-    send_state(s);
-    sa = separateValue(s,',',0);
-    Serial.print(sa);
-    sb = separateValue(s,',',1);
-    xval = sb.toDouble();
-    if (sa == "left"){
-      drive_left(xval);    
+  ss.listen();
+  if (ss.available() > 0){
+    if (gps.encode(ss.read()))
+    {
+      //Serial.print(F("it is going into nav_code"));
+      nav_code();
     }
-    else{
-      if (sa == "right"){
-        drive_right(xval);
-      }
-      else{
-        if (sa == "straight"){
-          drive_straight(xval);
-        }
-        else{
-          if (sa == "turn"){
-            turn_left(xval);
-          }
-          else{
-            if (sa == "switch"){
-              smart_stop();
-              switch_motors();
-            }
-          }
-        }
-      }
-    }
-    s = "";
   }
-  smart_stop();
-//  drive_straight(1);
-//  smart_stop();
-//  drive_right(3);
-//  smart_stop();
-//  drive_straight(1);
-//  smart_stop();
-//  drive_left(5);
-//  delay(2000);
-//
-//  stop_fun();
-//  delay(2000);
-//  
-//  switch_motors;
-//  delay(500);
-//  drive_straight(10);
-//  delay(2000);
-//  drive_left(10);
-//  delay(2000);
-//  drive_straight(10);
-//  delay(2000);
-//  drive_right(10);
-//  delay(2000);
-//
-//  stop_fun(0);
-//  while(1);
-//  delay(2000);
-//
-//  switch_motors();
-//  delay(500);
+  if (distance_to_goal < 3)
+  {
+    if (gps.location.isValid()){
+      winner();
+    }
+  }
+  
 }
 
-void check_for_messages(){
-  while (HC12.available()) {        // Check if HC-12 has data
-    byte c = HC12.read();
-    s += char(c);
-    writer = true;
+void winner()
+{
+  stop_fun(0);
+  HC12.listen();
+  while (1){
+    Serial.print("You Did It");
+    HC12.write("You did it!;");
+    send_state("gps_coordinates",after_lat,after_lng,distance_to_goal);
   }
-  
+}
+
+void nav_code(){
+  after_lat = gps.location.lat();
+  after_lng = gps.location.lng();
+  distance_to_goal = TinyGPSPlus::distanceBetween(after_lat,after_lng,Goal_Lat,Goal_Lng);
+  curr_dir = round(gps.course.deg());
+  goal_dir = round(TinyGPSPlus::courseTo(after_lat,after_lng,Goal_Lat,Goal_Lng));
+  delta_dir = int(((curr_dir+360)-goal_dir)) % 360; 
+  Serial.print(distance_to_goal);
+  Serial.print("\t");
+  Serial.print(delta_dir);
+  Serial.println();
+  HC12.listen();
+  send_state("directions_to_goal",distance_to_goal,delta_dir);
+  ss.listen();
+  smartDelay(0);
+  if (gps.location.isValid()){
+    transform_angle_to_fraction(delta_dir);
+  }
+}
+
+void transform_angle_to_fraction(double command_angle) {
+  //angle greater than zero
+  double L = 0;
+  if (command_angle > 90) {
+    L = 1;
+  }
+  else {
+    L = command_angle/90;
+  }
+  drive(L);
+}
+
+void drive(double back_command)
+{
+  digitalWrite(frontMotor2, LOW); 
+  digitalWrite(backMotor2, LOW);
+
+  double front_command = round((1-back_command)*255);
+   back_command = round(back_command*255);
+  Serial.println(back_command);
+  analogWrite(frontMotor1, front_command);
+  analogWrite(backMotor1, back_command);
 }
 
 void send_state(String typer, double x, double y, double z)
@@ -185,28 +177,6 @@ void send_state(String typer, double x, double y, double z)
   s = typer+','+sa+','+sb+','+sc;
   HC12.print(s);
   HC12.write(";");
-}
-
-void switch_motors(){
-  int a = frontMotor1;
-  int b = frontMotor2;
-  int c = backMotor1;
-  int d = backMotor2;
-  frontMotor1 = b;
-  frontMotor2 = a;
-  backMotor1 = d;
-  backMotor2 = c;
-  Serial.print("Switching Motors!");
-  switch (orientation){
-    case upside:
-      orientation = downside;
-      Serial.print("Switching downside!");
-      break;
-    case downside:
-      orientation = upside;
-      Serial.print("Switching downside!");
-      break;
-  }
 }
 
 void smart_stop(){
@@ -263,120 +233,7 @@ void power_brake()
   smart_stop();
 }
 
-void drive_left(double dangle)
-{
-  if (orientation == upside){
-    digitalWrite(frontMotor2, LOW); 
-    digitalWrite(backMotor2, LOW);
-    Serial.print("same");
-    Serial.print(orientation);
-    analogWrite(frontMotor1, 1);
-    analogWrite(backMotor1, 255);   
-  }
-  else{
-    digitalWrite(frontMotor2, LOW); 
-    digitalWrite(backMotor2, LOW);
-    digitalWrite(backMotor1, LOW);
-    Serial.print("something different");
-    analogWrite(frontMotor1, 255);
-    analogWrite(backMotor1, 1);
-  }
-  
-  //check angle
-  Serial.print("Turning Left: ");
-  Serial.print(dangle);
-  distance = 0;
-  front_transitions = 0;
-  while(distance < dangle){
-    rotations = front_transitions/ppr;
-    distance = rotations * circumference;
-    Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
-  }
-}
 
-void turn_left(double dangle)
-{
-  if (orientation == upside){
-    digitalWrite(frontMotor1, LOW); 
-    digitalWrite(backMotor2, LOW);
-    Serial.print("same");
-    Serial.print(orientation);
-    analogWrite(frontMotor2, 25);
-    analogWrite(backMotor1, 255);
-    Serial.print("Turning Left: ");
-    Serial.print(dangle);
-    distance = 0;
-    back_transitions = 0;
-    while(distance < dangle){
-      rotations = back_transitions/ppr;
-      distance = rotations * circumference;
-      Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
-    }   
-  }
-  else{
-    digitalWrite(frontMotor2, LOW); 
-    digitalWrite(backMotor1, LOW);
-    Serial.print("something different");
-    analogWrite(frontMotor1, 255);
-    digitalWrite(backMotor2, LOW);
-    Serial.print("Turning Left: ");
-    Serial.print(dangle);
-    distance = 0;
-    front_transitions = 0;
-    while(distance < dangle){
-      rotations = front_transitions/ppr;
-      distance = rotations * circumference;
-      Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
-    }  
-  }
-  
-  //check angle
-
-}
-
-void drive_right(double dangle)
-{
-  Serial.print("Turning Right: ");
-  send_state("Right_turn",dangle);
-  drive_left(90);
-  smart_stop();
-  switch_motors();
-  drive_left(90-abs(dangle));
-  Serial.print(dangle);
-  smart_stop();
-}
-
-void drive_straight(double dist)
-{
-  digitalWrite(frontMotor2, LOW); 
-  digitalWrite(backMotor2, LOW);
-  
-  digitalWrite(frontMotor1, HIGH);
-  digitalWrite(backMotor1, HIGH);
-    
-  //check distance
-  Serial.print("Driving Straight: ");
-  Serial.print(dist);
-  // delay(3000);
-  distance = 0;
-  front_transitions = 0;
-  while(distance < dist){
-    rotations = front_transitions/ppr;
-    distance = rotations * circumference;
-    Serial.println(distance); // you need this line otherwise transitions doesn't update!!!!
-  }
-  power_brake();
-}
-
-void front_encoder_counter() {
-  front_transitions += 1;
-  //Serial.print(back_transitions);
-}
-
-void back_encoder_counter() {
-  back_transitions += 1;
-  //Serial.print(back_transitions);
-}
 
 //notes:
 

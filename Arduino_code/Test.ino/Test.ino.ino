@@ -4,7 +4,7 @@
 double distance_to_goal;
 double delta_dir;
 
-static const int RXPin = 2, TXPin = 3; // according to the gps
+static const int RXPin = 7, TXPin = 8; // according to the gps
 static const uint32_t GPSBaud = 9600;
 static const uint32_t HC12Baud = 9600;
 double after_lat;
@@ -13,7 +13,11 @@ double curr_dir;
 double goal_dir;
 double init_lat;
 double init_lng;
-double distance_covered;
+double distance_covered,h;
+
+bool writer;
+
+String s,sa,sb;
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -31,7 +35,7 @@ void setup()
   digitalWrite(11, LOW);   
   digitalWrite(12, LOW);   
 
-  Serial.begin(115200);
+  Serial.begin(1200);
   ss.begin(GPSBaud);
   HC12.begin(HC12Baud);               // Serial port to HC12
 
@@ -41,6 +45,18 @@ void setup()
 
 void loop()
 {
+  ss.listen();
+  h = -1;
+  if (ss.available() > 0) // if gps is working
+  {
+    if (gps.encode(ss.read())) //if you are able to encode the gps object
+    {
+      Serial.print("made it2");
+      if (gps.altitude.isUpdated())
+        h = gps.altitude.meters();
+    }
+  }
+  
   ss.listen();
   if (ss.available() > 0)
   {
@@ -58,6 +74,16 @@ void loop()
   {
     Serial.println(F("No GPS detected: check wiring."));
   }
+}
+
+void check_for_messages(){
+  HC12.listen();
+  while (HC12.available()) {        // Check if HC-12 has data
+    byte c = HC12.read();
+    s += char(c);
+    writer = true;
+  }
+  ss.listen();
 }
 
 void winner()
@@ -98,6 +124,7 @@ void nav_code()
     Serial.println();
     HC12.listen();
     HC12.write("Hello World");
+    check_for_messages();
     ss.listen();
     smartDelay(0);
     //change direction
@@ -239,4 +266,3 @@ int sign(double x)
 
 
   
-
