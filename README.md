@@ -15,4 +15,4 @@ Current Settings:
 - baud rate: 1200 (default is 9600)
 
 
-old:Autonomous drive software for UGV, written for OpenPilot Revolution using the airbourne_f4 library for hardware abstraction.
+old: Autonomous drive software for UGV, written for OpenPilot Revolution using the airbourne_f4 library for hardware abstraction.
