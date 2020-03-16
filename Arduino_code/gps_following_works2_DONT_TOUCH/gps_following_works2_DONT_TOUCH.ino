@@ -103,7 +103,6 @@ void setup() {
 void loop() {
   if (millis()/1000-timep > 20){
     HC12.listen();
-    send_state("waiting_for_input");
     timep = millis()/1000;
     Serial.print("times up!");
     stop_fun(0);
