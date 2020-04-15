@@ -1,7 +1,7 @@
 # UGV Autonomous Drive
 2019-2020:
 Advice for next year's team
-https://youtu.be/oaVgXmCSSKs
+https://youtu.be/SJ_s1FctJcw
 
 Changed to Arduino Nano for simplicity of use. Using HC-12 as antenna (need to check if actually compliant with competition guidelines, 2019 team said something about not being FCC compliant), and a UBLOX NEO-M8N for GPS signal. We are using the Arduino TinyGPS++ and the pre-installed SoftwareSerial libraries.
 
